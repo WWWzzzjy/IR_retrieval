@@ -8,7 +8,9 @@ __pycache__/
 venv/
 env/
 
-data/
+!data/
+data/*
+!data/.gitkeep
 logs/
 checkpoints/
 outputs/
@@ -22,4 +24,4 @@ wandb/
 .idea/
 .vscode/
 
-*.zip
+data.zip

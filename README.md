@@ -43,6 +43,12 @@ python scripts/prepare_data.py \
 python scripts/train.py --config configs/baseline.yaml
 ```
 
+For Kaggle, use the GitHub + Kaggle Dataset workflow in [docs/kaggle.md](docs/kaggle.md):
+
+```bash
+python scripts/train.py --config configs/kaggle.yaml
+```
+
 Common overrides:
 
 ```bash
