@@ -126,6 +126,16 @@ python scripts/visualize_embeddings.py \
   --output outputs/train_tsne.png
 ```
 
+Visualize augmentation strength before training:
+
+```bash
+python scripts/visualize_augmentations.py \
+  --config configs/baseline.yaml \
+  --split train \
+  --num_examples 6 \
+  --output outputs/augmentation_examples.png
+```
+
 ## Tests
 
 ```bash
