@@ -9,6 +9,8 @@ from typing import Any, Optional
 import torch
 from torch.utils.data import Dataset
 
+from src.utils.json_io import load_json_file
+
 
 class IRSpectrumDataset(Dataset[dict[str, Any]]):
     """Load individual spectrum JSON files as PyTorch samples.
@@ -103,11 +105,7 @@ class IRSpectrumDataset(Dataset[dict[str, Any]]):
         if not path.exists():
             raise FileNotFoundError(f"Spectrum file not found: {path}")
 
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON in {path}") from exc
+        payload = load_json_file(path)
 
         spectrum = payload.get("spectrum")
         if not isinstance(spectrum, dict):
@@ -145,4 +143,3 @@ class IRSpectrumDataset(Dataset[dict[str, Any]]):
             "x": x_tensor,
             "metadata": metadata,
         }
-

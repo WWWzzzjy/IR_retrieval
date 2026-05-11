@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from src.data.augmentations import SpectrumAugmentor
 from src.data.collate import ContrastiveCollator, eval_collate
 from src.data.dataset import IRSpectrumDataset
+from src.utils.json_io import load_json_file
 
 
 class IRSpectrumDataModule(pl.LightningDataModule):
@@ -199,8 +200,7 @@ class IRSpectrumDataModule(pl.LightningDataModule):
 
         if path.name.startswith("_"):
             return None
-        with path.open("r", encoding="utf-8") as handle:
-            payload: dict[str, Any] = json.load(handle)
+        payload = load_json_file(path)
         spectrum = payload.get("spectrum") if isinstance(payload.get("spectrum"), dict) else {}
         y_values = spectrum.get("y")
         if not isinstance(y_values, list) or len(y_values) != self.spectrum_length:

@@ -15,6 +15,8 @@ from tqdm import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.utils.json_io import load_json_file
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
@@ -68,8 +70,7 @@ def read_sample(
 
     if path.name.startswith("_"):
         return None
-    with path.open("r", encoding="utf-8") as handle:
-        payload: dict[str, Any] = json.load(handle)
+    payload = load_json_file(path)
     spectrum = payload.get("spectrum") if isinstance(payload.get("spectrum"), dict) else {}
     y_values = spectrum.get("y")
     if not isinstance(y_values, list) or len(y_values) != spectrum_length:
