@@ -107,7 +107,7 @@ wandb:
 
 callbacks:
   early_stopping:
-    enabled: true
+    enabled: false
     patience: 20
   checkpoint:
     save_top_k: 3
