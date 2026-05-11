@@ -108,16 +108,14 @@ Checkpoints are written to:
 
 Kaggle persists files in `/kaggle/working` as notebook outputs after the run finishes.
 
-TensorBoard logs are written to:
-
-```text
-/kaggle/working/checkpoints/tensorboard/
-```
-
-On a normal cloud GPU server, start TensorBoard with:
+For visual training curves, enable WandB:
 
 ```bash
-tensorboard --logdir /kaggle/working/checkpoints/tensorboard --host 0.0.0.0 --port 6006
+wandb login
+python scripts/train.py \
+  --config configs/kaggle.yaml \
+  --set wandb.enabled=true \
+  --set data.data_dir=/kaggle/input/ir-spectra/raw
 ```
 
 ## 8. Resume

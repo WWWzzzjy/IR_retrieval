@@ -4,6 +4,5 @@ pytorch-lightning>=2.0
 PyYAML>=6.0
 tqdm>=4.66
 wandb>=0.16
-tensorboard>=2.16
 scikit-learn>=1.4
 matplotlib>=3.8

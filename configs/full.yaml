@@ -105,9 +105,6 @@ wandb:
   mode: online
   tags: [full]
 
-logger:
-  type: tensorboard
-
 callbacks:
   early_stopping:
     enabled: true

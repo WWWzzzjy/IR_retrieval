@@ -9,7 +9,7 @@ from typing import Any
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger, WandbLogger
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_logger(config: dict[str, Any]) -> CSVLogger | TensorBoardLogger | WandbLogger:
+def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger:
     """Build a Lightning logger from config."""
 
     train_cfg = config.get("train", {})
@@ -67,13 +67,7 @@ def build_logger(config: dict[str, Any]) -> CSVLogger | TensorBoardLogger | Wand
             offline=wandb_cfg.get("mode", "online") == "offline",
             log_model=bool(wandb_cfg.get("log_model", False)),
         )
-    logger_cfg = config.get("logger", {})
-    logger_type = str(logger_cfg.get("type", "tensorboard")).lower()
-    if logger_type == "csv":
-        return CSVLogger(save_dir=output_dir, name="csv_logs", version=run_name)
-    if logger_type != "tensorboard":
-        raise ValueError(f"Unsupported logger.type={logger_type!r}; expected tensorboard or csv")
-    return TensorBoardLogger(save_dir=output_dir, name="tensorboard", version=run_name)
+    return CSVLogger(save_dir=output_dir, name="csv_logs", version=run_name)
 
 
 def build_callbacks(config: dict[str, Any]) -> list[Any]:
