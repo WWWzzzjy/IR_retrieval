@@ -55,12 +55,7 @@ augmentation:
   wavenumber_shift:
     enabled: true
     probability: 0.6
-    max_shift_points: 20
-  local_mask:
-    enabled: true
-    probability: 0.6
-    min_fraction: 0.05
-    max_fraction: 0.15
+    max_shift_points: 5
   peak_width:
     enabled: true
     probability: 0.3
