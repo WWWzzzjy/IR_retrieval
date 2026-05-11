@@ -105,6 +105,9 @@ wandb:
   mode: offline
   tags: [kaggle]
 
+logger:
+  type: tensorboard
+
 callbacks:
   early_stopping:
     enabled: true
@@ -112,4 +115,3 @@ callbacks:
   checkpoint:
     save_top_k: 3
     save_last: true
-

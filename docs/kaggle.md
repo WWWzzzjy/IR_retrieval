@@ -108,6 +108,18 @@ Checkpoints are written to:
 
 Kaggle persists files in `/kaggle/working` as notebook outputs after the run finishes.
 
+TensorBoard logs are written to:
+
+```text
+/kaggle/working/checkpoints/tensorboard/
+```
+
+On a normal cloud GPU server, start TensorBoard with:
+
+```bash
+tensorboard --logdir /kaggle/working/checkpoints/tensorboard --host 0.0.0.0 --port 6006
+```
+
 ## 8. Resume
 
 ```bash

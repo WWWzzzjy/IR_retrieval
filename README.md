@@ -68,6 +68,23 @@ python scripts/train.py --config configs/baseline.yaml --limit-train-batches 0.0
 
 Use `--fast-dev-run` for a one-batch smoke test, `--overfit-batches` to verify the model can fit a tiny subset, and `--limit-train-batches` for quick partial-epoch checks.
 
+## TensorBoard
+
+When `wandb.enabled=false`, training logs are written with TensorBoardLogger:
+
+```bash
+python scripts/train.py --config configs/baseline.yaml --set wandb.enabled=false
+tensorboard --logdir checkpoints/tensorboard --host 0.0.0.0 --port 6006
+```
+
+For a remote GPU server, forward the port from your laptop:
+
+```bash
+ssh -L 6006:127.0.0.1:6006 user@server
+```
+
+Then open `http://127.0.0.1:6006` locally.
+
 ## Evaluate
 
 Lightning checkpoints are loaded through `IRContrastiveModule.load_from_checkpoint()` and evaluated with `Trainer.test()`:
