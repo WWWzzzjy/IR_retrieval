@@ -7,6 +7,18 @@ from pathlib import Path
 from typing import Any
 
 
+def should_skip_json_file(path: str | Path) -> bool:
+    """Return whether a path is an auxiliary file rather than a real spectrum JSON."""
+
+    json_path = Path(path)
+    return (
+        json_path.name.startswith(".")
+        or json_path.name.startswith("_")
+        or "__MACOSX" in json_path.parts
+        or any(part.startswith(".") for part in json_path.parts)
+    )
+
+
 def load_json_file(path: str | Path) -> dict[str, Any]:
     """Load a JSON object from disk with common text encoding fallbacks.
 
@@ -36,4 +48,3 @@ def load_json_file(path: str | Path) -> dict[str, Any]:
         return payload
     detail = "; ".join(errors)
     raise ValueError(f"Failed to decode JSON file {json_path}. Tried utf-8, utf-8-sig, gb18030, latin-1. {detail}")
-

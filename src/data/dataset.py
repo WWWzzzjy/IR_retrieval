@@ -9,7 +9,7 @@ from typing import Any, Optional
 import torch
 from torch.utils.data import Dataset
 
-from src.utils.json_io import load_json_file
+from src.utils.json_io import load_json_file, should_skip_json_file
 
 
 class IRSpectrumDataset(Dataset[dict[str, Any]]):
@@ -40,7 +40,11 @@ class IRSpectrumDataset(Dataset[dict[str, Any]]):
         if self.split_index is not None:
             self.entries = self._load_split_entries(self.split_index, split)
         else:
-            self.entries = [{"path": path} for path in sorted(self.data_dir.rglob("*.json"))]
+            self.entries = [
+                {"path": path}
+                for path in sorted(self.data_dir.rglob("*.json"))
+                if not should_skip_json_file(path)
+            ]
 
         if not self.entries:
             raise ValueError(f"No spectrum JSON files found for split={split!r} in {self.data_dir}")

@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from src.data.augmentations import SpectrumAugmentor
 from src.data.collate import ContrastiveCollator, eval_collate
 from src.data.dataset import IRSpectrumDataset
-from src.utils.json_io import load_json_file
+from src.utils.json_io import load_json_file, should_skip_json_file
 
 
 class IRSpectrumDataModule(pl.LightningDataModule):
@@ -198,7 +198,7 @@ class IRSpectrumDataModule(pl.LightningDataModule):
     def _read_sample(self, path: Path, group_by: str) -> dict[str, str] | None:
         """Read split metadata from one valid spectrum JSON file."""
 
-        if path.name.startswith("_"):
+        if should_skip_json_file(path):
             return None
         payload = load_json_file(path)
         spectrum = payload.get("spectrum") if isinstance(payload.get("spectrum"), dict) else {}

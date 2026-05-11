@@ -15,7 +15,7 @@ from tqdm import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.utils.json_io import load_json_file
+from src.utils.json_io import load_json_file, should_skip_json_file
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,7 +68,7 @@ def read_sample(
 ) -> dict[str, str] | None:
     """Read split metadata from one valid spectrum JSON file."""
 
-    if path.name.startswith("_"):
+    if should_skip_json_file(path):
         return None
     payload = load_json_file(path)
     spectrum = payload.get("spectrum") if isinstance(payload.get("spectrum"), dict) else {}
