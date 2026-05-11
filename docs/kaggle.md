@@ -62,6 +62,14 @@ print("lightning", pl.__version__)
 PY
 ```
 
+For V100 cloud machines, if PyTorch reports that the minimum supported CUDA capability is 7.5,
+replace the preinstalled torch wheel with the V100-compatible requirements:
+
+```bash
+pip uninstall -y torch torchvision torchaudio
+pip install --no-cache-dir -r requirements-v100.txt
+```
+
 ## 5. Generate Splits
 
 ```bash
@@ -117,4 +125,3 @@ Kaggle persists files in `/kaggle/working` as notebook outputs after the run fin
   --split train \
   --output /kaggle/working/train_embeddings.npz
 ```
-
