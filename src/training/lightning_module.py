@@ -17,7 +17,7 @@ from src.evaluation.retrieval import (
     recall_at_k_aligned,
     recall_at_k_from_groups,
 )
-from src.losses import MaskedReconstructionLoss, info_nce_loss
+from src.losses import MaskedReconstructionLoss, retrieval_ce_loss, semi_hard_negative_margin_loss
 from src.models import IRTransformerEncoder
 from src.training.scheduler import build_warmup_cosine_scheduler
 from src.training.utils import random_patch_mask
@@ -43,7 +43,11 @@ class IRContrastiveModule(pl.LightningModule):
         self.encoder = IRTransformerEncoder.from_config(model_cfg)
         self.temperature = float(loss_cfg.get("temperature", 0.1))
         self.alpha = float(loss_cfg.get("alpha", 1.0))
-        self.beta = float(loss_cfg.get("beta", 0.3))
+        self.beta = float(loss_cfg.get("beta", 0.0))
+        margin_cfg = loss_cfg.get("hard_negative", {})
+        self.margin_enabled = bool(margin_cfg.get("enabled", True))
+        self.margin_weight = float(margin_cfg.get("weight", 0.1))
+        self.margin = float(margin_cfg.get("margin", 0.2))
         self.mask_ratio = float(recon_cfg.get("mask_ratio", 0.15))
         self.reconstruction_loss = MaskedReconstructionLoss(
             patch_size=int(model_cfg.get("patch_size", 10)),
@@ -63,12 +67,25 @@ class IRContrastiveModule(pl.LightningModule):
         return self.encoder(x, wavenumbers=wavenumbers)["embedding"]
 
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
-        """Compute contrastive and reconstruction losses for a training batch."""
+        """Compute retrieval-aligned contrastive and reconstruction losses."""
 
         losses = self._compute_losses(batch)
-        self.log("train/loss_total", losses["loss"], on_step=True, on_epoch=True, prog_bar=True, batch_size=batch["view1"].shape[0])
-        self.log("train/loss_infonce", losses["info_nce"], on_step=True, on_epoch=True, batch_size=batch["view1"].shape[0])
-        self.log("train/loss_recon", losses["reconstruction"], on_step=True, on_epoch=True, batch_size=batch["view1"].shape[0])
+        batch_size = batch["view1"].shape[0]
+        self.log("train/loss_total", losses["loss"], on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log("train/loss_retrieval_ce", losses["retrieval_ce"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/loss_infonce", losses["retrieval_ce"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/loss_margin", losses["margin"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/loss_recon", losses["reconstruction"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/positive_cosine", losses["positive_cosine"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log(
+            "train/hard_negative_cosine",
+            losses["hard_negative_cosine"],
+            on_step=True,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log("train/retrieval_margin", losses["retrieval_margin"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/batch_recall_at_1", losses["batch_recall_at_1"], on_step=True, on_epoch=True, batch_size=batch_size)
         return losses["loss"]
 
     def validation_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
@@ -78,7 +95,9 @@ class IRContrastiveModule(pl.LightningModule):
         losses = self._compute_losses(contrastive_batch)
         batch_size = batch["spectrum"].shape[0]
         self.log("val/loss_total", losses["loss"], on_epoch=True, prog_bar=True, batch_size=batch_size, sync_dist=True)
-        self.log("val/loss_infonce", losses["info_nce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("val/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("val/loss_infonce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("val/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("val/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._validation_outputs)
         return losses["loss"]
@@ -96,7 +115,9 @@ class IRContrastiveModule(pl.LightningModule):
         losses = self._compute_losses(contrastive_batch)
         batch_size = batch["spectrum"].shape[0]
         self.log("test/loss_total", losses["loss"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("test/loss_infonce", losses["info_nce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("test/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("test/loss_infonce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
+        self.log("test/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("test/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._test_outputs)
         return losses["loss"]
@@ -135,18 +156,33 @@ class IRContrastiveModule(pl.LightningModule):
         }
 
     def _compute_losses(self, batch: dict[str, Any]) -> dict[str, torch.Tensor]:
-        """Compute InfoNCE and masked reconstruction losses."""
+        """Compute augmented-to-raw retrieval CE plus optional auxiliary losses."""
 
-        view1 = batch["view1"]
-        view2 = batch["view2"]
+        augmented = batch["view1"]
+        raw = batch["original"]
         wavenumbers = batch.get("x")
-        output1 = self.encoder(view1, wavenumbers=wavenumbers)
-        output2 = self.encoder(view2, wavenumbers=wavenumbers)
-        contrastive = info_nce_loss(output1["embedding"], output2["embedding"], temperature=self.temperature)
+        augmented_output = self.encoder(augmented, wavenumbers=wavenumbers)
+        raw_output = self.encoder(raw, wavenumbers=wavenumbers)
+        retrieval_ce, _logits, cosine = retrieval_ce_loss(
+            augmented_output["embedding"],
+            raw_output["embedding"],
+            temperature=self.temperature,
+            symmetric=True,
+        )
 
-        reconstruction = torch.zeros((), device=self.device, dtype=contrastive.dtype)
+        margin_loss, positive_cosine, hard_negative_cosine, retrieval_margin = semi_hard_negative_margin_loss(
+            cosine,
+            margin=self.margin,
+        )
+        if not self.margin_enabled or self.margin_weight <= 0.0:
+            margin_loss = torch.zeros((), device=self.device, dtype=retrieval_ce.dtype)
+
+        labels = torch.arange(cosine.shape[0], device=cosine.device)
+        batch_recall_at_1 = (cosine.argmax(dim=1) == labels).float().mean()
+
+        reconstruction = torch.zeros((), device=self.device, dtype=retrieval_ce.dtype)
         if self.beta > 0.0 and self.mask_ratio > 0.0:
-            recon_input = torch.cat([view1, view2], dim=0)
+            recon_input = torch.cat([augmented, raw], dim=0)
             recon_wavenumbers = torch.cat([wavenumbers, wavenumbers], dim=0) if wavenumbers is not None else None
             patch_mask = batch.get("patch_mask")
             if patch_mask is None:
@@ -170,20 +206,28 @@ class IRContrastiveModule(pl.LightningModule):
                 patch_centers=patch_centers,
             )
 
-        total = self.alpha * contrastive + self.beta * reconstruction
-        return {"loss": total, "info_nce": contrastive, "reconstruction": reconstruction}
+        total = self.alpha * retrieval_ce + self.margin_weight * margin_loss + self.beta * reconstruction
+        return {
+            "loss": total,
+            "retrieval_ce": retrieval_ce,
+            "margin": margin_loss,
+            "reconstruction": reconstruction,
+            "positive_cosine": positive_cosine.mean(),
+            "hard_negative_cosine": hard_negative_cosine.mean(),
+            "retrieval_margin": retrieval_margin.mean(),
+            "batch_recall_at_1": batch_recall_at_1,
+        }
 
     def _make_contrastive_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Create two augmented validation/test views without changing data loaders."""
 
         spectra = batch["spectrum"]
         view1 = torch.stack([self.eval_augmentor(spectrum) for spectrum in spectra.detach().cpu()], dim=0).to(self.device)
-        view2 = torch.stack([self.eval_augmentor(spectrum) for spectrum in spectra.detach().cpu()], dim=0).to(self.device)
+        wavenumbers = batch.get("x")
         result = {
             "view1": view1,
-            "view2": view2,
-            "original": spectra,
-            "x": batch.get("x"),
+            "original": spectra.to(self.device),
+            "x": wavenumbers.to(self.device) if wavenumbers is not None else None,
         }
         return result
 
@@ -213,20 +257,23 @@ class IRContrastiveModule(pl.LightningModule):
         spectra = torch.cat([item["spectra"] for item in outputs], dim=0)
         wavenumbers = self._cat_optional_tensors([item["wavenumbers"] for item in outputs])
         group_ids = [group_id for item in outputs for group_id in item["group_ids"]]
-        top_k = tuple(int(item) for item in self.config.get("evaluation", {}).get("top_k", [1, 5, 10]))
+        eval_cfg = self.config.get("evaluation", {})
+        top_k = tuple(int(item) for item in eval_cfg.get("top_k", [1, 5, 10]))
+        retrieval_mode = str(eval_cfg.get("retrieval_mode", "self_augmentation"))
 
-        metrics, valid_group_queries = recall_at_k_from_groups(embeddings, group_ids, top_k)
-        if valid_group_queries == 0:
+        if retrieval_mode == "group":
+            metrics, valid_group_queries = recall_at_k_from_groups(embeddings, group_ids, top_k)
+            metrics.update(self._group_similarity_statistics(embeddings, group_ids))
+            metrics["retrieval_time_ms"] = average_retrieval_time_ms(embeddings, embeddings)
+            metrics["retrieval_mode"] = 0.0
+        else:
             augmented = torch.stack([self.eval_augmentor(spectrum) for spectrum in spectra], dim=0)
             query_embeddings = self._encode_tensor_batches(augmented, wavenumbers)
             metrics = recall_at_k_aligned(query_embeddings, embeddings, top_k)
             metrics.update(aligned_pair_statistics(query_embeddings, embeddings))
             metrics["retrieval_time_ms"] = average_retrieval_time_ms(query_embeddings, embeddings)
             metrics["retrieval_mode"] = 1.0
-        else:
-            metrics.update(self._group_similarity_statistics(embeddings, group_ids))
-            metrics["retrieval_time_ms"] = average_retrieval_time_ms(embeddings, embeddings)
-            metrics["retrieval_mode"] = 0.0
+            valid_group_queries = 0
         metrics["valid_group_queries"] = float(valid_group_queries)
 
         renamed = self._rename_metrics_for_lightning(metrics)

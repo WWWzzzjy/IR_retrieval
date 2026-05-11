@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import torch
 
-from src.losses import MaskedReconstructionLoss, info_nce_loss
+from src.losses import (
+    MaskedReconstructionLoss,
+    info_nce_loss,
+    retrieval_ce_loss,
+    semi_hard_negative_margin_loss,
+)
 
 
 def test_info_nce_is_finite() -> None:
@@ -14,6 +19,36 @@ def test_info_nce_is_finite() -> None:
     loss = info_nce_loss(embeddings, embeddings, temperature=0.1)
     assert loss.ndim == 0
     assert torch.isfinite(loss)
+
+
+def test_retrieval_ce_prefers_aligned_pairs() -> None:
+    """Retrieval CE should produce finite logits for augmented-to-raw matching."""
+
+    embeddings = torch.eye(4)
+    loss, logits, cosine = retrieval_ce_loss(embeddings, embeddings, temperature=0.1)
+    assert loss.ndim == 0
+    assert logits.shape == (4, 4)
+    assert cosine.shape == (4, 4)
+    assert torch.isfinite(loss)
+    assert torch.equal(logits.argmax(dim=1), torch.arange(4))
+
+
+def test_semi_hard_margin_loss_tracks_retrieval_margin() -> None:
+    """Margin helper should select close negatives and expose cosine diagnostics."""
+
+    cosine = torch.tensor(
+        [
+            [0.9, 0.8, 0.1],
+            [0.2, 0.7, 0.6],
+            [0.3, 0.4, 0.8],
+        ]
+    )
+    loss, positive, negative, margin = semi_hard_negative_margin_loss(cosine, margin=0.2)
+    assert loss.ndim == 0
+    assert torch.isfinite(loss)
+    assert torch.allclose(positive, torch.tensor([0.9, 0.7, 0.8]))
+    assert torch.all(negative < positive)
+    assert torch.allclose(margin, positive - negative)
 
 
 def test_masked_reconstruction_loss_zero_for_exact_prediction() -> None:
@@ -35,4 +70,3 @@ def test_masked_reconstruction_loss_zero_for_exact_prediction() -> None:
 
     bad_loss = criterion(target_patches + 1.0, target, patch_mask, patch_centers)
     assert float(bad_loss) > 0.0
-

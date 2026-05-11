@@ -23,8 +23,10 @@ LOG_EVERY="${LOG_EVERY:-100}"
 
 EMBEDDING_DIM="${EMBEDDING_DIM:-256}"
 PROJECTION_HIDDEN_DIM="${PROJECTION_HIDDEN_DIM:-512}"
-TEMPERATURE="${TEMPERATURE:-0.2}"
-RECON_BETA="${RECON_BETA:-0.2}"
+TEMPERATURE="${TEMPERATURE:-0.07}"
+RECON_BETA="${RECON_BETA:-0.0}"
+MARGIN_WEIGHT="${MARGIN_WEIGHT:-0.1}"
+MARGIN="${MARGIN:-0.2}"
 MASK_RATIO="${MASK_RATIO:-0.2}"
 RESUME_FROM="${RESUME_FROM:-null}"
 
@@ -63,7 +65,10 @@ python scripts/train.py \
   --set model.projection_hidden_dim="${PROJECTION_HIDDEN_DIM}" \
   --set loss.temperature="${TEMPERATURE}" \
   --set loss.beta="${RECON_BETA}" \
+  --set loss.hard_negative.enabled=true \
+  --set loss.hard_negative.weight="${MARGIN_WEIGHT}" \
+  --set loss.hard_negative.margin="${MARGIN}" \
   --set loss.reconstruction.mask_ratio="${MASK_RATIO}" \
-  --set augmentation.peak_width.enabled=true \
+  --set augmentation.peak_width.enabled=false \
   --set train.resume_from="${RESUME_FROM}" \
   2>&1 | tee "${RUN_LOG}"
