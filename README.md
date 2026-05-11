@@ -81,6 +81,19 @@ Then open the run page shown in the terminal. No server port is required.
 
 When `wandb.enabled=false`, Lightning writes lightweight CSV logs under `checkpoints/csv_logs/`.
 
+Every training run writes CSV metrics regardless of WandB state:
+
+```text
+<train.output_dir>/csv_logs/<run_name>/metrics.csv
+```
+
+The helper script also saves terminal output:
+
+```bash
+bash scripts/runs/train_effective.sh
+# log file: logs/train_YYYYMMDD_HHMMSS.log
+```
+
 ## Evaluate
 
 Lightning checkpoints are loaded through `IRContrastiveModule.load_from_checkpoint()` and evaluated with `Trainer.test()`:

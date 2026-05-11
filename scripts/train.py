@@ -50,15 +50,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger:
-    """Build a Lightning logger from config."""
+def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger | list[CSVLogger | WandbLogger]:
+    """Build Lightning loggers from config.
+
+    A CSV logger is always enabled so every run leaves a local metrics.csv file
+    for later analysis, even when WandB is also active.
+    """
 
     train_cfg = config.get("train", {})
     output_dir = str(train_cfg.get("output_dir", "checkpoints"))
     run_name = make_run_name(config)
     wandb_cfg = config.get("wandb", {})
+    csv_logger = CSVLogger(save_dir=output_dir, name="csv_logs", version=run_name)
     if bool(wandb_cfg.get("enabled", False)):
-        return WandbLogger(
+        wandb_logger = WandbLogger(
             project=wandb_cfg.get("project", "ir-encoder"),
             entity=wandb_cfg.get("entity"),
             tags=wandb_cfg.get("tags", []),
@@ -67,7 +72,8 @@ def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger:
             offline=wandb_cfg.get("mode", "online") == "offline",
             log_model=bool(wandb_cfg.get("log_model", False)),
         )
-    return CSVLogger(save_dir=output_dir, name="csv_logs", version=run_name)
+        return [wandb_logger, csv_logger]
+    return csv_logger
 
 
 def build_callbacks(config: dict[str, Any]) -> list[Any]:

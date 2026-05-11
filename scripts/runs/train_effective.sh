@@ -9,6 +9,7 @@ CONFIG="${CONFIG:-configs/baseline.yaml}"
 DATA_DIR="${DATA_DIR:-data/raw}"
 SPLIT_INDEX="${SPLIT_INDEX:-data/splits.json}"
 OUTPUT_DIR="${OUTPUT_DIR:-checkpoints/effective}"
+RUN_LOG_DIR="${RUN_LOG_DIR:-logs}"
 
 WANDB_ENABLED="${WANDB_ENABLED:-true}"
 BATCH_SIZE="${BATCH_SIZE:-512}"
@@ -25,6 +26,10 @@ PROJECTION_HIDDEN_DIM="${PROJECTION_HIDDEN_DIM:-512}"
 TEMPERATURE="${TEMPERATURE:-0.07}"
 RECON_BETA="${RECON_BETA:-0.2}"
 MASK_RATIO="${MASK_RATIO:-0.2}"
+RESUME_FROM="${RESUME_FROM:-null}"
+
+mkdir -p "${RUN_LOG_DIR}"
+RUN_LOG="${RUN_LOG:-${RUN_LOG_DIR}/train_$(date +%Y%m%d_%H%M%S).log}"
 
 if [[ ! -f "${SPLIT_INDEX}" ]]; then
   python scripts/prepare_data.py \
@@ -33,6 +38,8 @@ if [[ ! -f "${SPLIT_INDEX}" ]]; then
     --group_by parent_metadata \
     --spectrum_length 460
 fi
+
+echo "Writing terminal log to ${RUN_LOG}"
 
 python scripts/train.py \
   --config "${CONFIG}" \
@@ -57,5 +64,6 @@ python scripts/train.py \
   --set loss.temperature="${TEMPERATURE}" \
   --set loss.beta="${RECON_BETA}" \
   --set loss.reconstruction.mask_ratio="${MASK_RATIO}" \
-  --set augmentation.peak_width.enabled=true
-
+  --set augmentation.peak_width.enabled=true \
+  --set train.resume_from="${RESUME_FROM}" \
+  2>&1 | tee "${RUN_LOG}"
