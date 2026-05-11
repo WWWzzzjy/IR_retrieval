@@ -1,0 +1,114 @@
+data:
+  data_dir: data/raw
+  split_index: data/splits.json
+  spectrum_length: 460
+  cache: false
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  group_by: parent_metadata
+
+model:
+  spectrum_length: 460
+  patch_size: 10
+  stride: 10
+  hidden_dim: 256
+  num_layers: 6
+  num_heads: 8
+  ffn_dim: 1024
+  dropout: 0.1
+  embedding_dim: 128
+  projection_hidden_dim: null
+  pooling: attention
+  pos_encoding: wavenumber_sinusoidal
+  wavenumber_min: 455.126
+  wavenumber_max: 3996.0
+  position_scale: 1000.0
+  normalize_embeddings: true
+
+loss:
+  temperature: 0.1
+  alpha: 1.0
+  beta: 0.3
+  reconstruction:
+    mask_ratio: 0.15
+    fingerprint_weighting: true
+    fingerprint_threshold: 1500.0
+    fingerprint_weight: 1.5
+    default_weight: 1.0
+
+augmentation:
+  gaussian_noise:
+    enabled: true
+    probability: 0.8
+    sigma: 0.01
+  intensity_scale:
+    enabled: true
+    probability: 0.8
+    min_scale: 0.9
+    max_scale: 1.1
+  baseline_drift:
+    enabled: true
+    probability: 0.5
+    max_degree: 3
+    amplitude: 0.02
+  wavenumber_shift:
+    enabled: true
+    probability: 0.5
+    max_shift_points: 20
+  local_mask:
+    enabled: true
+    probability: 0.5
+    min_fraction: 0.05
+    max_fraction: 0.15
+  peak_width:
+    enabled: false
+    probability: 0.3
+    kernel_size: 7
+    sigma_min: 0.6
+    sigma_max: 1.2
+  clamp: true
+
+train:
+  seed: 42
+  batch_size: 256
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: false
+  drop_last: true
+  num_epochs: 100
+  lr: 0.0001
+  weight_decay: 0.01
+  warmup_epochs: 5
+  min_lr_ratio: 0.05
+  precision: "16-mixed"
+  grad_accum: 1
+  grad_clip: 1.0
+  val_every_n_epoch: 5
+  log_every_n_steps: 50
+  deterministic: false
+  output_dir: checkpoints
+  resume_from: null
+
+evaluation:
+  batch_size: 256
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: false
+  top_k: [1, 5, 10]
+  max_items: null
+
+wandb:
+  enabled: true
+  project: ir-encoder
+  entity: null
+  mode: online
+  tags: []
+
+callbacks:
+  early_stopping:
+    enabled: true
+    patience: 20
+  checkpoint:
+    save_top_k: 3
+    save_last: true
