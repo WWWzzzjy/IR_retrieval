@@ -19,7 +19,6 @@ SPLIT="${SPLIT:-test}"
 BATCH_SIZE="${BATCH_SIZE:-512}"
 NUM_WORKERS="${NUM_WORKERS:-8}"
 TOP_K="${TOP_K:-1 5 10}"
-ERROR_TOP_K="${ERROR_TOP_K:-5}"
 NUM_ERROR_CASES="${NUM_ERROR_CASES:-200}"
 MAX_ITEMS="${MAX_ITEMS:-null}"
 DEVICE="${DEVICE:-auto}"
@@ -73,7 +72,6 @@ python scripts/evaluate.py \
   --batch_size "${BATCH_SIZE}" \
   --output_dir "${ANALYSIS_DIR}" \
   --top_k "${TOP_K_ARGS[@]}" \
-  --error_top_k "${ERROR_TOP_K}" \
   --num_error_cases "${NUM_ERROR_CASES}" \
   --set data.data_dir="${DATA_DIR}" \
   --set data.split_index="${SPLIT_INDEX}" \

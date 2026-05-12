@@ -41,7 +41,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_dir", type=Path, default=Path("outputs/eval"))
     parser.add_argument("--max_items", type=int, default=None)
     parser.add_argument("--top_k", type=int, nargs="+", default=None)
-    parser.add_argument("--error_top_k", type=int, default=10)
     parser.add_argument("--num_error_cases", type=int, default=200)
     parser.add_argument("--skip_trainer_test", action="store_true")
     parser.add_argument("--set", dest="overrides", action="append", default=[], help="Override dotted config key")
@@ -190,14 +189,54 @@ def source_from_path(path: str) -> str:
     return parent or ""
 
 
-def write_error_files(
+def sorted_error_indices(analysis: dict[str, Any], num_error_cases: int) -> torch.Tensor:
+    """Return top-1 misses sorted by how much the wrong top-1 beats the target."""
+
+    positive = analysis["positive"]
+    top_indices = analysis["top_indices"]
+    top_values = analysis["top_values"]
+    target = analysis["target"]
+    misses = torch.nonzero(top_indices[:, 0] != target, as_tuple=False).flatten()
+    if misses.numel():
+        wrong_margin = top_values[misses, 0] - positive[misses]
+        misses = misses[torch.argsort(wrong_margin, descending=True)]
+    if num_error_cases > 0:
+        misses = misses[:num_error_cases]
+    return misses
+
+
+def make_candidate_record(
+    candidate_index: int,
+    rank: int,
+    score: float,
+    query_index: int,
+    metadata: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Create one top-k candidate JSON record."""
+
+    ids = metadata["ids"]
+    group_ids = metadata["group_ids"]
+    paths = metadata["paths"]
+    return {
+        "rank": rank,
+        "index": candidate_index,
+        "id": ids[candidate_index],
+        "group_id": group_ids[candidate_index],
+        "source": source_from_path(paths[candidate_index]),
+        "path": paths[candidate_index],
+        "cosine": score,
+        "is_target": candidate_index == query_index,
+        "is_same_group": group_ids[candidate_index] == group_ids[query_index],
+    }
+
+
+def make_error_record(
+    query_index: int,
+    top_k: int,
     analysis: dict[str, Any],
     metadata: dict[str, list[str]],
-    output_dir: Path,
-    error_top_k: int,
-    num_error_cases: int,
-) -> tuple[Path, Path]:
-    """Write ranked error cases and their top-k candidates."""
+) -> dict[str, Any]:
+    """Create one error-case JSON record with query info and top-k candidates."""
 
     ids = metadata["ids"]
     group_ids = metadata["group_ids"]
@@ -206,106 +245,61 @@ def write_error_files(
     ranks = analysis["ranks"]
     top_indices = analysis["top_indices"]
     top_values = analysis["top_values"]
-    target = analysis["target"]
-    misses = torch.nonzero(top_indices[:, 0] != target, as_tuple=False).flatten()
-    if misses.numel():
-        wrong_margin = top_values[misses, 0] - positive[misses]
-        ordered_misses = misses[torch.argsort(wrong_margin, descending=True)]
-    else:
-        ordered_misses = misses
-    if num_error_cases > 0:
-        ordered_misses = ordered_misses[:num_error_cases]
-
-    errors_path = output_dir / "errors.csv"
-    topk_path = output_dir / "error_topk.csv"
-    with errors_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "query_index",
-                "query_id",
-                "query_group_id",
-                "query_source",
-                "query_path",
-                "true_rank",
-                "positive_cosine",
-                "top1_index",
-                "top1_id",
-                "top1_group_id",
-                "top1_source",
-                "top1_path",
-                "top1_cosine",
-                "top1_minus_positive",
-                "top1_same_group",
-            ],
-        )
-        writer.writeheader()
-        for query_index in ordered_misses.tolist():
-            top1_index = int(top_indices[query_index, 0].item())
-            top1_score = float(top_values[query_index, 0].item())
-            positive_score = float(positive[query_index].item())
-            writer.writerow(
-                {
-                    "query_index": query_index,
-                    "query_id": ids[query_index],
-                    "query_group_id": group_ids[query_index],
-                    "query_source": source_from_path(paths[query_index]),
-                    "query_path": paths[query_index],
-                    "true_rank": int(ranks[query_index].item()),
-                    "positive_cosine": positive_score,
-                    "top1_index": top1_index,
-                    "top1_id": ids[top1_index],
-                    "top1_group_id": group_ids[top1_index],
-                    "top1_source": source_from_path(paths[top1_index]),
-                    "top1_path": paths[top1_index],
-                    "top1_cosine": top1_score,
-                    "top1_minus_positive": top1_score - positive_score,
-                    "top1_same_group": group_ids[top1_index] == group_ids[query_index],
-                }
+    query_positive = float(positive[query_index].item())
+    top1_score = float(top_values[query_index, 0].item())
+    limit = min(top_k, top_indices.shape[1])
+    return {
+        "query": {
+            "index": query_index,
+            "id": ids[query_index],
+            "group_id": group_ids[query_index],
+            "source": source_from_path(paths[query_index]),
+            "path": paths[query_index],
+            "true_rank": int(ranks[query_index].item()),
+            "positive_cosine": query_positive,
+            "top1_minus_positive": top1_score - query_positive,
+        },
+        "topk": [
+            make_candidate_record(
+                int(top_indices[query_index, rank].item()),
+                rank + 1,
+                float(top_values[query_index, rank].item()),
+                query_index,
+                metadata,
             )
+            for rank in range(limit)
+        ],
+    }
 
-    with topk_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=[
-                "query_index",
-                "query_id",
-                "true_rank",
-                "positive_cosine",
-                "candidate_rank",
-                "candidate_index",
-                "candidate_id",
-                "candidate_group_id",
-                "candidate_source",
-                "candidate_path",
-                "candidate_cosine",
-                "is_target",
-                "is_same_group",
+
+def write_error_json_files(
+    analysis: dict[str, Any],
+    metadata: dict[str, list[str]],
+    output_dir: Path,
+    num_error_cases: int,
+    top_k_values: tuple[int, ...] = (5, 10),
+) -> list[Path]:
+    """Write top-k JSON files for ranked top-1 retrieval errors."""
+
+    selected_errors = sorted_error_indices(analysis, num_error_cases)
+    total_errors = int((analysis["ranks"] > 1).sum().item())
+    paths: list[Path] = []
+    for top_k in top_k_values:
+        output_path = output_dir / f"errors_top{top_k}.json"
+        payload = {
+            "top_k": top_k,
+            "num_errors_total": total_errors,
+            "num_errors_exported": int(selected_errors.numel()),
+            "sort": "top1_minus_positive_desc",
+            "errors": [
+                make_error_record(int(query_index), top_k, analysis, metadata)
+                for query_index in selected_errors.tolist()
             ],
-        )
-        writer.writeheader()
-        for query_index in ordered_misses.tolist():
-            limit = min(error_top_k, top_indices.shape[1])
-            for rank in range(limit):
-                candidate_index = int(top_indices[query_index, rank].item())
-                writer.writerow(
-                    {
-                        "query_index": query_index,
-                        "query_id": ids[query_index],
-                        "true_rank": int(ranks[query_index].item()),
-                        "positive_cosine": float(positive[query_index].item()),
-                        "candidate_rank": rank + 1,
-                        "candidate_index": candidate_index,
-                        "candidate_id": ids[candidate_index],
-                        "candidate_group_id": group_ids[candidate_index],
-                        "candidate_source": source_from_path(paths[candidate_index]),
-                        "candidate_path": paths[candidate_index],
-                        "candidate_cosine": float(top_values[query_index, rank].item()),
-                        "is_target": candidate_index == query_index,
-                        "is_same_group": group_ids[candidate_index] == group_ids[query_index],
-                    }
-                )
-    return errors_path, topk_path
+        }
+        with output_path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=True)
+        paths.append(output_path)
+    return paths
 
 
 def write_source_summary(
@@ -412,7 +406,7 @@ def main() -> None:
     similarity = query @ library.T
     top_k = args.top_k or [int(item) for item in config.get("evaluation", {}).get("top_k", [1, 5, 10])]
     top_k = sorted(set(top_k))
-    analysis = compute_self_retrieval(similarity, top_k, max(max(top_k), args.error_top_k, 1))
+    analysis = compute_self_retrieval(similarity, top_k, max(max(top_k), 10, 1))
     metrics = analysis["metrics"]
     add_loss_metrics(metrics, similarity, config)
     metrics.update(
@@ -430,11 +424,10 @@ def main() -> None:
     metrics_path = output_dir / "metrics.json"
     with metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(metrics, handle, indent=2, ensure_ascii=True)
-    errors_path, topk_path = write_error_files(
+    error_json_paths = write_error_json_files(
         analysis,
         {"ids": encoded["ids"], "group_ids": encoded["group_ids"], "paths": encoded["paths"]},
         output_dir,
-        args.error_top_k,
         args.num_error_cases,
     )
     source_summary_path = write_source_summary(
@@ -445,8 +438,8 @@ def main() -> None:
 
     print(json.dumps(metrics, indent=2, ensure_ascii=True))
     print(f"Wrote metrics to {metrics_path}")
-    print(f"Wrote error cases to {errors_path}")
-    print(f"Wrote error top-k candidates to {topk_path}")
+    for error_json_path in error_json_paths:
+        print(f"Wrote error cases to {error_json_path}")
     print(f"Wrote source summary to {source_summary_path}")
 
 
