@@ -71,6 +71,7 @@ python scripts/train.py \
   --set loss.hard_negative.weight="${MARGIN_WEIGHT}" \
   --set loss.hard_negative.margin="${MARGIN}" \
   --set loss.reconstruction.mask_ratio="${MASK_RATIO}" \
+  --set evaluation.retrieval_mode=self_augmentation \
   --set augmentation.peak_width.enabled=false \
   --set train.resume_from="${RESUME_FROM}" \
   2>&1 | tee "${RUN_LOG}"
