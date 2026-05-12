@@ -73,7 +73,6 @@ class IRContrastiveModule(pl.LightningModule):
         batch_size = batch["view1"].shape[0]
         self.log("train/loss_total", losses["loss"], on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
         self.log("train/loss_retrieval_ce", losses["retrieval_ce"], on_step=True, on_epoch=True, batch_size=batch_size)
-        self.log("train/loss_infonce", losses["retrieval_ce"], on_step=True, on_epoch=True, batch_size=batch_size)
         self.log("train/loss_margin", losses["margin"], on_step=True, on_epoch=True, batch_size=batch_size)
         self.log("train/loss_recon", losses["reconstruction"], on_step=True, on_epoch=True, batch_size=batch_size)
         self.log("train/positive_cosine", losses["positive_cosine"], on_step=True, on_epoch=True, batch_size=batch_size)
@@ -96,7 +95,6 @@ class IRContrastiveModule(pl.LightningModule):
         batch_size = batch["spectrum"].shape[0]
         self.log("val/loss_total", losses["loss"], on_epoch=True, prog_bar=True, batch_size=batch_size, sync_dist=True)
         self.log("val/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("val/loss_infonce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("val/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("val/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._validation_outputs)
@@ -116,7 +114,6 @@ class IRContrastiveModule(pl.LightningModule):
         batch_size = batch["spectrum"].shape[0]
         self.log("test/loss_total", losses["loss"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("test/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("test/loss_infonce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("test/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("test/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._test_outputs)

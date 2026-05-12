@@ -87,6 +87,7 @@ train:
   log_every_n_steps: 50
   deterministic: false
   output_dir: /kaggle/working/checkpoints
+  run_name: null
   resume_from: null
 
 evaluation:

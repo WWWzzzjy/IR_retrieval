@@ -28,6 +28,7 @@ RECON_BETA="${RECON_BETA:-0.0}"
 MARGIN_WEIGHT="${MARGIN_WEIGHT:-0.1}"
 MARGIN="${MARGIN:-0.2}"
 MASK_RATIO="${MASK_RATIO:-0.2}"
+RUN_NAME="${RUN_NAME:-null}"
 RESUME_FROM="${RESUME_FROM:-null}"
 
 mkdir -p "${RUN_LOG_DIR}"
@@ -50,6 +51,7 @@ python scripts/train.py \
   --set data.cache=true \
   --set wandb.enabled="${WANDB_ENABLED}" \
   --set train.output_dir="${OUTPUT_DIR}" \
+  --set train.run_name="${RUN_NAME}" \
   --set train.batch_size="${BATCH_SIZE}" \
   --set train.grad_accum="${GRAD_ACCUM}" \
   --set train.lr="${LR}" \

@@ -90,6 +90,7 @@ def apply_named_overrides(config: dict[str, Any], values: dict[str, Any]) -> dic
         "epochs": "train.num_epochs",
         "resume_from": "train.resume_from",
         "output_dir": "train.output_dir",
+        "run_name": "train.run_name",
     }
     updated = copy.deepcopy(config)
     for arg_name, dotted_path in mapping.items():

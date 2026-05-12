@@ -103,7 +103,7 @@ pip install --no-cache-dir -r requirements-v100.txt
 Checkpoints are written to:
 
 ```text
-/kaggle/working/checkpoints/
+/kaggle/working/checkpoints/<run_name>/
 ```
 
 Kaggle persists files in `/kaggle/working` as notebook outputs after the run finishes.
@@ -123,14 +123,14 @@ python scripts/train.py \
 ```bash
 !python scripts/train.py \
   --config configs/kaggle.yaml \
-  --set train.resume_from=/kaggle/working/checkpoints/last.ckpt
+  --set train.resume_from=/kaggle/working/checkpoints/<run_name>/last.ckpt
 ```
 
 ## 9. Build Embedding Index
 
 ```bash
 !python scripts/build_index.py \
-  --checkpoint /kaggle/working/checkpoints/last.ckpt \
+  --checkpoint /kaggle/working/checkpoints/<run_name>/last.ckpt \
   --config configs/kaggle.yaml \
   --split train \
   --output /kaggle/working/train_embeddings.npz

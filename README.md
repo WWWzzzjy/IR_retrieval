@@ -54,7 +54,8 @@ Common overrides:
 ```bash
 python scripts/train.py --config configs/full.yaml --batch_size 128 --lr 5e-5
 python scripts/train.py --config configs/full.yaml --set model.pooling=cls --set loss.beta=0.1
-python scripts/train.py --config configs/full.yaml --resume_from checkpoints/last.ckpt
+python scripts/train.py --config configs/full.yaml --run_name retrieval-ce-v1
+python scripts/train.py --config configs/full.yaml --resume_from checkpoints/<run_name>/last.ckpt
 python scripts/train.py --config configs/baseline.yaml --set wandb.enabled=false
 ```
 
@@ -79,7 +80,14 @@ python scripts/train.py --config configs/baseline.yaml --set wandb.enabled=true
 
 Then open the run page shown in the terminal. No server port is required.
 
-When `wandb.enabled=false`, Lightning writes lightweight CSV logs under `checkpoints/csv_logs/`.
+Checkpoints are saved per run:
+
+```text
+<train.output_dir>/<run_name>/last.ckpt
+<train.output_dir>/<run_name>/best-epoch=XX-val_recall_at_1=YYYY.ckpt
+```
+
+When `wandb.enabled=false`, Lightning writes lightweight CSV logs under `<train.output_dir>/csv_logs/`.
 
 Every training run writes CSV metrics regardless of WandB state:
 
@@ -100,7 +108,7 @@ Lightning checkpoints are loaded through `IRContrastiveModule.load_from_checkpoi
 
 ```bash
 python scripts/evaluate.py \
-  --checkpoint checkpoints/last.ckpt \
+  --checkpoint checkpoints/<run_name>/last.ckpt \
   --config configs/baseline.yaml
 ```
 
@@ -110,7 +118,7 @@ Index building uses direct `model.forward()` inference rather than a Lightning `
 
 ```bash
 python scripts/build_index.py \
-  --checkpoint checkpoints/last.ckpt \
+  --checkpoint checkpoints/<run_name>/last.ckpt \
   --config configs/baseline.yaml \
   --split train \
   --output outputs/train_embeddings.npz

@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--resume_from", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
+    parser.add_argument("--run_name", type=str, default=None)
     parser.add_argument("--fast-dev-run", action="store_true", help="Run one train/val/test batch for debugging")
     parser.add_argument("--overfit-batches", type=parse_int_or_float, default=0.0, help="Lightning overfit_batches value")
     parser.add_argument(
@@ -50,6 +51,39 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def is_nullish(value: Any) -> bool:
+    """Return whether a config value should be treated as unset."""
+
+    return value is None or str(value).strip().lower() in {"", "none", "null"}
+
+
+def resolve_run_name(config: dict[str, Any]) -> str:
+    """Resolve the run name used by loggers and checkpoint directories."""
+
+    train_cfg = config.setdefault("train", {})
+    explicit_name = train_cfg.get("run_name")
+    if not is_nullish(explicit_name):
+        return str(explicit_name)
+
+    resume_from = train_cfg.get("resume_from")
+    if not is_nullish(resume_from):
+        checkpoint_parent = Path(str(resume_from)).expanduser().parent
+        output_dir = Path(str(train_cfg.get("output_dir", "checkpoints"))).expanduser()
+        if checkpoint_parent != Path(".") and checkpoint_parent.resolve() != output_dir.resolve():
+            return checkpoint_parent.name
+
+    return make_run_name(config)
+
+
+def checkpoint_dir(config: dict[str, Any]) -> Path:
+    """Return the per-run checkpoint directory."""
+
+    train_cfg = config.get("train", {})
+    output_dir = Path(str(train_cfg.get("output_dir", "checkpoints")))
+    run_name = str(train_cfg.get("run_name") or resolve_run_name(config))
+    return output_dir / run_name
+
+
 def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger | list[CSVLogger | WandbLogger]:
     """Build Lightning loggers from config.
 
@@ -59,7 +93,7 @@ def build_logger(config: dict[str, Any]) -> CSVLogger | WandbLogger | list[CSVLo
 
     train_cfg = config.get("train", {})
     output_dir = str(train_cfg.get("output_dir", "checkpoints"))
-    run_name = make_run_name(config)
+    run_name = str(train_cfg.get("run_name") or resolve_run_name(config))
     wandb_cfg = config.get("wandb", {})
     csv_logger = CSVLogger(save_dir=output_dir, name="csv_logs", version=run_name)
     if bool(wandb_cfg.get("enabled", False)):
@@ -83,11 +117,11 @@ def build_callbacks(config: dict[str, Any]) -> list[Any]:
     callback_cfg = config.get("callbacks", {})
     checkpoint_cfg = callback_cfg.get("checkpoint", {})
     early_cfg = callback_cfg.get("early_stopping", {})
-    output_dir = Path(str(train_cfg.get("output_dir", "checkpoints")))
+    ckpt_dir = checkpoint_dir(config)
 
     callbacks: list[Any] = [
         ModelCheckpoint(
-            dirpath=output_dir,
+            dirpath=ckpt_dir,
             monitor="val/recall_at_1",
             mode="max",
             save_top_k=int(checkpoint_cfg.get("save_top_k", 3)),
@@ -116,7 +150,10 @@ def main() -> None:
     config = apply_named_overrides(config, vars(args))
     config = apply_overrides(config, args.overrides)
     train_cfg = config.get("train", {})
+    train_cfg["run_name"] = resolve_run_name(config)
     pl.seed_everything(int(train_cfg.get("seed", 42)), workers=True)
+    print(f"Run name: {train_cfg['run_name']}")
+    print(f"Checkpoint dir: {checkpoint_dir(config)}")
 
     datamodule = IRSpectrumDataModule(config)
     model = IRContrastiveModule(config)
@@ -132,7 +169,7 @@ def main() -> None:
         callbacks=build_callbacks(config),
         deterministic=bool(train_cfg.get("deterministic", False)),
         gradient_clip_val=float(train_cfg.get("grad_clip", 0.0)),
-        default_root_dir=str(train_cfg.get("output_dir", "checkpoints")),
+        default_root_dir=str(checkpoint_dir(config)),
         fast_dev_run=bool(args.fast_dev_run),
         overfit_batches=args.overfit_batches,
         limit_train_batches=args.limit_train_batches,
