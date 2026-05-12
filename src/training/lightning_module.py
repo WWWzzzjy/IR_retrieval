@@ -71,20 +71,42 @@ class IRContrastiveModule(pl.LightningModule):
 
         losses = self._compute_losses(batch)
         batch_size = batch["view1"].shape[0]
-        self.log("train/loss_total", losses["loss"], on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
-        self.log("train/loss_retrieval_ce", losses["retrieval_ce"], on_step=True, on_epoch=True, batch_size=batch_size)
-        self.log("train/loss_margin", losses["margin"], on_step=True, on_epoch=True, batch_size=batch_size)
-        self.log("train/loss_recon", losses["reconstruction"], on_step=True, on_epoch=True, batch_size=batch_size)
-        self.log("train/positive_cosine", losses["positive_cosine"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log("train/loss_total_epoch", losses["loss"], on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
         self.log(
-            "train/hard_negative_cosine",
-            losses["hard_negative_cosine"],
-            on_step=True,
+            "train/loss_retrieval_ce_epoch",
+            losses["retrieval_ce"],
+            on_step=False,
             on_epoch=True,
             batch_size=batch_size,
         )
-        self.log("train/retrieval_margin", losses["retrieval_margin"], on_step=True, on_epoch=True, batch_size=batch_size)
-        self.log("train/batch_recall_at_1", losses["batch_recall_at_1"], on_step=True, on_epoch=True, batch_size=batch_size)
+        self.log(
+            "train/positive_cosine_epoch",
+            losses["positive_cosine"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train/hard_negative_cosine_epoch",
+            losses["hard_negative_cosine"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train/retrieval_margin_epoch",
+            losses["retrieval_margin"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
+        self.log(
+            "train/batch_recall_at_1_epoch",
+            losses["batch_recall_at_1"],
+            on_step=False,
+            on_epoch=True,
+            batch_size=batch_size,
+        )
         return losses["loss"]
 
     def validation_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
@@ -95,8 +117,6 @@ class IRContrastiveModule(pl.LightningModule):
         batch_size = batch["spectrum"].shape[0]
         self.log("val/loss_total", losses["loss"], on_epoch=True, prog_bar=True, batch_size=batch_size, sync_dist=True)
         self.log("val/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("val/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("val/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._validation_outputs)
         return losses["loss"]
 
@@ -114,8 +134,6 @@ class IRContrastiveModule(pl.LightningModule):
         batch_size = batch["spectrum"].shape[0]
         self.log("test/loss_total", losses["loss"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self.log("test/loss_retrieval_ce", losses["retrieval_ce"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("test/loss_margin", losses["margin"], on_epoch=True, batch_size=batch_size, sync_dist=True)
-        self.log("test/loss_recon", losses["reconstruction"], on_epoch=True, batch_size=batch_size, sync_dist=True)
         self._collect_epoch_output(batch, self._test_outputs)
         return losses["loss"]
 
@@ -273,7 +291,19 @@ class IRContrastiveModule(pl.LightningModule):
             valid_group_queries = 0
         metrics["valid_group_queries"] = float(valid_group_queries)
 
-        renamed = self._rename_metrics_for_lightning(metrics)
+        logged_metric_names = {
+            "recall_at_1",
+            "recall_at_5",
+            "recall_at_10",
+            "same_cosine_mean",
+            "different_cosine_mean",
+            "cosine_gap",
+        }
+        renamed = {
+            name: value
+            for name, value in self._rename_metrics_for_lightning(metrics).items()
+            if name in logged_metric_names
+        }
         for name, value in renamed.items():
             tensor_value = torch.tensor(value, dtype=torch.float32, device=self.device)
             self.log(
@@ -285,7 +315,7 @@ class IRContrastiveModule(pl.LightningModule):
                 sync_dist=True,
             )
             if prefix == "val" and name == "recall_at_1":
-                self.log("val_recall_at_1", tensor_value, on_step=False, on_epoch=True, sync_dist=True)
+                self.log("val_recall_at_1", tensor_value, on_step=False, on_epoch=True, logger=False, sync_dist=True)
 
     def _encode_tensor_batches(
         self,
