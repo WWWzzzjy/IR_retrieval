@@ -7,7 +7,7 @@ set -euo pipefail
 #   RUN_NAME=my-run TOP_K=10 NUM_CASES=50 bash scripts/runs/plot_error_topk.sh
 #   ERRORS_JSON=outputs/eval/my-run/test/errors_top5.json bash scripts/runs/plot_error_topk.sh
 
-RUN_NAME="${RUN_NAME:-}"
+RUN_NAME="20260512-081631_h256_e256_bs512_lr1e-4"
 SPLIT="${SPLIT:-test}"
 TOP_K="${TOP_K:-5}"
 ERRORS_JSON="${ERRORS_JSON:-}"

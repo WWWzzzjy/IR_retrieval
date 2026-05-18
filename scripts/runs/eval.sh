@@ -7,10 +7,10 @@ set -euo pipefail
 #   CHECKPOINT=checkpoints/effective/my-run/best-epoch=74-val_recall_at_1=0.9711.ckpt bash scripts/runs/eval.sh
 
 CONFIG="${CONFIG:-configs/baseline.yaml}"
-DATA_DIR="${DATA_DIR:-data/raw}"
-SPLIT_INDEX="${SPLIT_INDEX:-data/splits.json}"
+DATA_DIR="${DATA_DIR:-data/libs_samples_460}"
+SPLIT_INDEX="${SPLIT_INDEX:-data/libs_samples_460_split.json}"
 CHECKPOINT_ROOT="${CHECKPOINT_ROOT:-checkpoints/effective}"
-RUN_NAME="${RUN_NAME:-}"
+RUN_NAME="20260512-081631_h256_e256_bs512_lr1e-4"
 CHECKPOINT="${CHECKPOINT:-}"
 ANALYSIS_DIR="${ANALYSIS_DIR:-outputs/eval}"
 RUN_LOG_DIR="${RUN_LOG_DIR:-logs}"

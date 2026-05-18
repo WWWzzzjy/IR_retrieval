@@ -6,8 +6,8 @@ set -euo pipefail
 #   BATCH_SIZE=768 EPOCHS=200 bash scripts/runs/train_effective.sh
 
 CONFIG="${CONFIG:-configs/baseline.yaml}"
-DATA_DIR="${DATA_DIR:-data/raw}"
-SPLIT_INDEX="${SPLIT_INDEX:-data/splits.json}"
+DATA_DIR="${DATA_DIR:-data/libs_samples_460}"
+SPLIT_INDEX="${SPLIT_INDEX:-data/libs_samples_460_split.json}"
 OUTPUT_DIR="${OUTPUT_DIR:-checkpoints/effective}"
 RUN_LOG_DIR="${RUN_LOG_DIR:-logs}"
 
